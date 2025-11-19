@@ -1,0 +1,14 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+env/
+# node/n8n exports
+workflows/n8n/*.backup.json
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+# secrets (never commit)
+*.key.json
+*.env
