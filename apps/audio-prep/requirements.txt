@@ -1,0 +1,6 @@
+google-cloud-storage==2.16.0
+google-auth==2.33.0
+google-auth-httplib2==0.2.0
+requests==2.32.3
+functions-framework==3.4.0
+cloudevents==1.10.1
