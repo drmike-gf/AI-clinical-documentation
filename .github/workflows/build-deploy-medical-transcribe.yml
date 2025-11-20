@@ -23,22 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # OIDC auth to GCP (set these two repo secrets once)
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_WIF_SA }}
+          # optional but handy:
+          create_credentials_file: true
+          export_environment_variables: true
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
 
-     - uses: google-github-actions/auth@v2
-  with:
-    workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-    service_account: ${{ secrets.GCP_WIF_SA }}
-    # optional but handy:
-    create_credentials_file: true
-    export_environment_variables: true
-    access_token_scopes: https://www.googleapis.com/auth/cloud-platform
-
-
+      - uses: google-github-actions/setup-gcloud@v2
+      
       - name: Build & push image
         run: |
           gcloud auth configure-docker $IMAGE_REGION-docker.pkg.dev -q
