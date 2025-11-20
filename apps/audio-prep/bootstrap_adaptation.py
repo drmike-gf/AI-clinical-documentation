@@ -1,47 +1,52 @@
-import os
-from google.api_core.exceptions import NotFound
-from google.cloud.speech_v2 import SpeechClient
-from google.cloud.speech_v2.types import cloud_speech
+# apps/audio-prep/bootstrap_adaptation.py
+import os, json
+import requests
+import google.auth
+from google.auth.transport.requests import Request
 
-PROJECT_ID = os.environ["GOOGLE_CLOUD_PROJECT"]
-LOCATION   = os.getenv("SPEECH_LOCATION", "us-central1")  # must match your recognizer region
-PHRASE_SET_ID = "ortho_airway_terms"
-PHRASE_SET_NAME = f"projects/{PROJECT_ID}/locations/{LOCATION}/phraseSets/{PHRASE_SET_ID}"
+PROJECT_ID = os.getenv("PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
+LOCATION   = os.getenv("REGION", "global")                       # must match your recognizer location
+PHRASE_SET_ID = os.getenv("PHRASE_SET_ID", "ortho_airway_terms") # choose an id you like
 
-# Optional: if you use a regional location, set the regional endpoint
-client = SpeechClient(client_options={"api_endpoint": f"{LOCATION}-speech.googleapis.com"})
+ENDPOINT = f"https://speech.googleapis.com/v2/projects/{PROJECT_ID}/locations/{LOCATION}"
+
+def _token():
+    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    creds.refresh(Request())
+    return creds.token
 
 def ensure_phrase_set():
-    # 1) Reuse if it already exists
-    try:
-        client.get_phrase_set(name=PHRASE_SET_NAME)
-        return PHRASE_SET_NAME
-    except NotFound:
-        pass
+    headers = {"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"}
 
-    # 2) Otherwise create it once (LRO; wait until done)
-    phrases = [
-        {"value": "orthognathic surgery", "boost": 18},
-        {"value": "mandibular advancement", "boost": 15},
-        {"value": "Dr. Movahed", "boost": 20},
-        {"value": "Pat McBride", "boost": 20},
-        {"value": "psychiatric clearance", "boost": 12},
-    ]
+    # 1) Try to GET existing PhraseSet
+    get_url = f"{ENDPOINT}/phraseSets/{PHRASE_SET_ID}"
+    r = requests.get(get_url, headers=headers)
+    if r.status_code == 200:
+        print(r.json()["name"])  # resource name to reuse
+        return
 
-    op = client.create_phrase_set(
-        parent=f"projects/{PROJECT_ID}/locations/{LOCATION}",
-        phrase_set=cloud_speech.PhraseSet(
-            display_name="Ortho/Psych bias terms",
-            phrases=[cloud_speech.PhraseSet.Phrase(**p) for p in phrases],
-            # Optional: set a default boost here; per-phrase boosts can override
-            boost=15.0,
-        ),
-        phrase_set_id=PHRASE_SET_ID,
-    )
+    if r.status_code != 404:
+        raise RuntimeError(f"GET PhraseSet failed: {r.status_code} {r.text}")
 
-    phrase_set = op.result()  # wait for creation to finish
-    return phrase_set.name
+    # 2) Create it once if not found
+    body = {
+        "displayName": "Ortho/Psych bias terms",
+        "phrases": [
+            {"value": "orthognathic surgery", "boost": 18},
+            {"value": "mandibular advancement", "boost": 15},
+            {"value": "tongue space", "boost": 15},
+            {"value": "psychiatric clearance", "boost": 12},
+            {"value": "Dr. Movahed", "boost": 20},
+            {"value": "Pat McBride", "boost": 20},
+            # add the names/terms you really care about
+        ]
+    }
+    create_url = f"{ENDPOINT}/phraseSets?phraseSetId={PHRASE_SET_ID}"
+    r = requests.post(create_url, headers=headers, data=json.dumps(body))
+    if r.status_code not in (200, 201):
+        raise RuntimeError(f"CREATE PhraseSet failed: {r.status_code} {r.text}")
+
+    print(r.json()["name"])      # e.g. projects/…/locations/global/phraseSets/ortho_airway_terms
 
 if __name__ == "__main__":
-    name = ensure_phrase_set()
-    print("PhraseSet ready:", name)
+    ensure_phrase_set()
