@@ -1,38 +1,41 @@
-name: Build & Deploy audio-prep
+name: Build & Deploy medical-transcribe
 
 on:
   push:
     branches: [ "main" ]
     paths:
-      - "apps/audio-prep/**"
-      - ".github/workflows/build-deploy-audio-prep.yml"
+      - "apps/medical-transcribe/**"
+      - "infra/scripts/**"
+      - ".github/workflows/build-deploy-medical-transcribe.yml"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # needed for OIDC
+      id-token: write
     env:
       PROJECT_ID: automations-n8n-463018
       REGION: us-central1
-      SERVICE: audio-prep
+      IMAGE_REGION: us-central1
+      SERVICE: medical-transcribe
       AR_REPO: us-central1-docker.pkg.dev/automations-n8n-463018/audio-pipelines
     steps:
       - uses: actions/checkout@v4
 
+      # OIDC auth to GCP (set these two repo secrets once)
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}   # set in repo secrets
-          service_account: ${{ secrets.GCP_WIF_SA }}                    # e.g., gh-actions-deployer@project.iam.gserviceaccount.com
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Build & push image
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev -q
-          IMAGE="${AR_REPO}/${SERVICE}:${GITHUB_SHA::7}"
-          gcloud builds submit apps/${SERVICE} --tag "$IMAGE"
+          gcloud auth configure-docker $IMAGE_REGION-docker.pkg.dev -q
+          IMAGE="$AR_REPO/$SERVICE:${GITHUB_SHA::7}"
+          gcloud builds submit apps/$SERVICE --tag "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Deploy Cloud Run
@@ -43,3 +46,8 @@ jobs:
             --no-allow-unauthenticated \
             --service-account=audio-prep-sa@${PROJECT_ID}.iam.gserviceaccount.com \
             --set-env-vars=PROJECT_ID=${PROJECT_ID},REGION=global,OUTPUT_BUCKET=phi-output-encounters,OUTPUT_PREFIX=transcripts/,PREPPED_BUCKET=phi-inbound-audio-raw,PREPPED_PREFIX=prepped/,SPEECH_MODEL=medical_conversation
+
+      # Optional: ensure the trigger exists in 'us'
+      - name: Ensure Eventarc trigger
+        run: |
+          bash infra/scripts/create-eventarc-trigger.sh
