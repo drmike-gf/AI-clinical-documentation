@@ -34,12 +34,15 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
       
-      - name: Build & push image
+      - name: Build & push image (Cloud Build with custom staging bucket)
         run: |
           gcloud auth configure-docker $IMAGE_REGION-docker.pkg.dev -q
           IMAGE="$AR_REPO/$SERVICE:${GITHUB_SHA::7}"
-          gcloud builds submit apps/$SERVICE --tag "$IMAGE"
+          gcloud builds submit apps/$SERVICE \
+            --gcs-source-staging-dir=gs://automations-n8n-463018-cb-staging/source \
+            --tag "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
 
       - name: Deploy Cloud Run
         run: |
