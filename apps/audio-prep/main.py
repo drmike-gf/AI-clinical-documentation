@@ -1,3 +1,5 @@
+PHRASESET_NAME = os.getenv("PHRASESET_NAME")  # e.g., "projects/.../phraseSets/psychosomatic_terms"
+
 import os, json, tempfile, subprocess
 from functions_framework import cloud_event
 from cloudevents.http.event import CloudEvent
@@ -74,18 +76,31 @@ def handler(event: CloudEvent):
         prepped_blob.upload_from_filename(dst_path, content_type="audio/flac")
         prepped_uri = f"gs://{PREPPED_BUCKET}/{prepped_key}"
         print(f"Uploaded prepped: {prepped_uri}")
-
+    
+# Only attach adaptation if the model supports it (medical_* doesn't)
+if PHRASESET_NAME and not MODEL.startswith("medical_"):
+    config["adaptation"] = {
+        "phraseSets": [
+            {"phraseSet": PHRASESET_NAME}
+        ]
+    }
+    
     # Kick off Speech v2 batchRecognize (medical)
     payload = {
-        "config": {
+        "config": config, {
             "autoDecodingConfig": {},
             "languageCodes": ["en-US"],
             "model": MODEL
         },
-        "files": [{"uri": prepped_uri}],
+       "files": [{"uri": prepped_uri}],
         "recognitionOutputConfig": {
-            "gcsOutputConfig": {"uri": f"gs://{OUTPUT_BUCKET}/{OUTPUT_PREFIX}"}
-        }
+        # NEW: request additional formats
+        "outputFormatConfig": {
+            "srt": {},  # SubRip (.srt)
+            "vtt": {}   # WebVTT (.vtt)
+        },
+        "gcsOutputConfig": {"uri": f"gs://{OUTPUT_BUCKET}"}
+    }
     }
     headers = {"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"}
     r = requests.post(SPEECH_URL, headers=headers, data=json.dumps(payload), timeout=120)
