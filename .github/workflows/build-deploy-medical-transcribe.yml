@@ -34,16 +34,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
       
- - name: Build & push image (no Cloud Build bucket)
-  run: |
-    gcloud auth configure-docker $IMAGE_REGION-docker.pkg.dev -q
-    IMAGE="$AR_REPO/$SERVICE:${GITHUB_SHA::7}"
-    docker build -t "$IMAGE" apps/$SERVICE
-    docker push "$IMAGE"
-    echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-
-
-
+      - name: Build & push image (no Cloud Build bucket)
+        run: |
+          gcloud auth configure-docker $IMAGE_REGION-docker.pkg.dev -q
+          IMAGE="$AR_REPO/$SERVICE:${GITHUB_SHA::7}"
+          docker build -t "$IMAGE" "apps/${SERVICE}"
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Deploy Cloud Run
         run: |
