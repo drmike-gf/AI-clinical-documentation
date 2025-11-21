@@ -77,35 +77,40 @@ def handler(event: CloudEvent):
         prepped_uri = f"gs://{PREPPED_BUCKET}/{prepped_key}"
         print(f"Uploaded prepped: {prepped_uri}")
     
+# Build base config once
+config = {
+    "autoDecodingConfig": {},
+    "languageCodes": ["en-US"],
+    "model": MODEL,  # e.g., "medical_conversation" or "medical_dictation"
+}
+
 # Only attach adaptation if the model supports it (medical_* doesn't)
 if PHRASESET_NAME and not MODEL.startswith("medical_"):
+    # PHRASESET_NAME should be the full resource name:
+    # projects/PROJECT_ID/locations/LOCATION/phraseSets/PHRASESET_ID
     config["adaptation"] = {
-        "phraseSets": [
-            {"phraseSet": PHRASESET_NAME}
-        ]
+        "phraseSets": [{"phraseSet": PHRASESET_NAME}]
     }
-    
-    # Kick off Speech v2 batchRecognize (medical)
-    payload = {
-        "config": config, {
-            "autoDecodingConfig": {},
-            "languageCodes": ["en-US"],
-            "model": MODEL
-        },
-       "files": [{"uri": prepped_uri}],
-        "recognitionOutputConfig": {
-        # NEW: request additional formats
+
+# Kick off Speech v2 batchRecognize
+payload = {
+    "config": config,                          # ✅ just the variable (a dict)
+    "files": [{"uri": prepped_uri}],
+    "recognitionOutputConfig": {
+        # (Optional) ask for extra formats in the output bucket
         "outputFormatConfig": {
-            "srt": {},  # SubRip (.srt)
-            "vtt": {}   # WebVTT (.vtt)
+            "srt": {},   # SubRip
+            "vtt": {}    # WebVTT
         },
-        "gcsOutputConfig": {"uri": f"gs://{OUTPUT_BUCKET}"}
+        # Write under your transcripts prefix (include trailing '/')
+        "gcsOutputConfig": {"uri": f"gs://{OUTPUT_BUCKET}/{OUTPUT_PREFIX}"}
     }
-    }
-    headers = {"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"}
-    r = requests.post(SPEECH_URL, headers=headers, data=json.dumps(payload), timeout=120)
-    print(f"Speech batchRecognize status {r.status_code}: {r.text}")
-    return ("", 204)
+}
+
+headers = {"Authorization": f"Bearer {_token()}", "Content-Type": "application/json"}
+r = requests.post(SPEECH_URL, headers=headers, data=json.dumps(payload), timeout=120)
+print(f"Speech batchRecognize status {r.status_code}: {r.text}")
+return ("", 204)
 
 if __name__ == "__main__":
     # Local dev: run a simple HTTP server (Functions Framework)
