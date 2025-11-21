@@ -18,6 +18,14 @@ PROJECT_ID = os.getenv("PROJECT_ID")
 PROJECT_NUM = os.getenv("PROJECT_NUM")
 REGION = os.getenv("REGION", "global")
 MODEL = os.getenv("SPEECH_MODEL", "medical_conversation")
+AUDIO_EXTS = (".wav",".flac",".m4a",".mp3",".aac",".ogg",".opus",".aiff",".aif")
+def is_audio(name, content_type):
+    return (content_type or "").startswith("audio/") or name.lower().endswith(AUDIO_EXTS)
+
+if not is_audio(name, content_type):
+    print(f"Skip non-audio: gs://{bucket}/{name} (contentType={content_type})")
+    return ("", 204)
+
 
 # Build Speech v2 endpoint
 SPEECH_URL = f"https://speech.googleapis.com/v2/projects/{PROJECT_ID}/locations/{REGION}/recognizers/_:batchRecognize"
